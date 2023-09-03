@@ -1,118 +1,282 @@
-import Image from 'next/image'
-import { Inter } from 'next/font/google'
+import { ColumnContainer } from "@/components/column-container";
+import {
+  CONTAINER_TYPES,
+  ColumnType,
+  ContainerType,
+  DEFAULT_COLUMNS,
+  DEFAULT_ITEMS,
+  ItemType,
+} from "@/components/data";
+import { ItemContainer } from "@/components/item-container";
+import {
+  DndContext,
+  DragEndEvent,
+  DragMoveEvent,
+  DragOverlay,
+  DragStartEvent,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { useState } from "react";
 
-const inter = Inter({ subsets: ['latin'] })
+type ColumnWithItems = ColumnType & {
+  items: ItemType[];
+};
+
+type ContainerData = Array<ColumnWithItems>;
+
+type ActiveContainerType = {
+  containerType: ContainerType;
+  item?: ItemType;
+  column?: ColumnWithItems;
+};
 
 export default function Home() {
+  const DEFAULT_CONTAINER_DATA = transformColumnAndItemToContainerData(
+    DEFAULT_COLUMNS,
+    DEFAULT_ITEMS
+  );
+
+  const [containerData, setContainerData] = useState(DEFAULT_CONTAINER_DATA);
+  const [activeContainer, setActiveContainer] =
+    useState<ActiveContainerType | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+
+    if (!active) return;
+
+    const activeData = active.data.current as {
+      containerType: ContainerType;
+      item?: ItemType;
+      column?: ColumnWithItems;
+    };
+
+    setActiveContainer(activeData);
+  };
+  const handleDragMove = (event: DragMoveEvent) => {
+    const { active, over } = event;
+
+    if (!active || !over) return;
+
+    const activeData = active.data.current as {
+      containerType: ContainerType;
+      item?: ItemType;
+      column?: ColumnWithItems;
+    };
+    const overData = over.data.current as {
+      containerType: ContainerType;
+      item?: ItemType;
+      column?: ColumnWithItems;
+    };
+
+    /* Column To Colum */
+    if (
+      activeData.containerType === CONTAINER_TYPES.Column &&
+      overData.containerType === CONTAINER_TYPES.Column &&
+      activeData.column &&
+      overData.column
+    ) {
+      const activeColumn = activeData.column;
+      const overColumn = overData.column;
+
+      const activeColumnIndex = containerData.findIndex(
+        (column) => column.id === activeColumn.id
+      );
+      const overColumnIndex = containerData.findIndex(
+        (column) => column.id === overColumn.id
+      );
+
+      let newContainerData = [...containerData];
+
+      newContainerData = arrayMove(
+        newContainerData,
+        activeColumnIndex,
+        overColumnIndex
+      );
+
+      setContainerData(newContainerData);
+    }
+
+    /* Item to Column */
+    if (
+      activeData.containerType === CONTAINER_TYPES.Item &&
+      overData.containerType === CONTAINER_TYPES.Column &&
+      activeData.item &&
+      overData.column
+    ) {
+      const activeItem = activeData.item;
+      const overColumn = overData.column;
+
+      const activeColumnIndex = containerData.findIndex(
+        (column) => column.id === activeItem.columnId
+      );
+      const overColumnIndex = containerData.findIndex(
+        (column) => column.id === overColumn.id
+      );
+
+      const newContainerData = [...containerData];
+      const newActiveColumn = { ...newContainerData[activeColumnIndex] };
+      const newOverColumn = { ...newContainerData[overColumnIndex] };
+
+      const activeItemIndex = newActiveColumn.items.findIndex(
+        (item) => item.id === activeItem.id
+      );
+
+      if (newActiveColumn && newOverColumn) {
+        const [movedItem] = newActiveColumn.items.splice(activeItemIndex, 1);
+
+        movedItem.columnId = newOverColumn.id;
+        newOverColumn.items.push(movedItem);
+        newContainerData[overColumnIndex] = newOverColumn;
+
+        setContainerData(newContainerData);
+      }
+    }
+
+    /* Item to Item */
+    if (
+      activeData.containerType === CONTAINER_TYPES.Item &&
+      overData.containerType === CONTAINER_TYPES.Item &&
+      activeData.item &&
+      overData.item
+    ) {
+      const activeItem = activeData.item;
+      const overItem = overData.item;
+
+      const activeColumnIndex = containerData.findIndex(
+        (column) => column.id === activeItem.columnId
+      );
+      const overColumnIndex = containerData.findIndex(
+        (column) => column.id === overItem.columnId
+      );
+
+      const newContainerData = [...containerData];
+      const newActiveColumn = { ...newContainerData[activeColumnIndex] };
+      const newOverColumn = { ...newContainerData[overColumnIndex] };
+
+      const activeItemIndex = newActiveColumn.items.findIndex(
+        (item) => item.id === activeItem.id
+      );
+      const overItemIndex = newOverColumn.items.findIndex(
+        (item) => item.id === overItem.id
+      );
+
+      if (newActiveColumn.id === newOverColumn.id) {
+        /* Same column */
+        newActiveColumn.items = arrayMove(
+          newActiveColumn.items,
+          activeItemIndex,
+          overItemIndex
+        );
+
+        newContainerData[activeColumnIndex] = newActiveColumn;
+
+        setContainerData(newContainerData);
+      } else {
+        /* Different column */
+        const [movedItem] = newActiveColumn.items.splice(activeItemIndex, 1);
+
+        movedItem.columnId = newOverColumn.id;
+        newOverColumn.items.splice(overItemIndex, 0, movedItem);
+        newContainerData[overColumnIndex] = newOverColumn;
+
+        setContainerData(newContainerData);
+      }
+    }
+  };
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveContainer(null);
+  };
+
   return (
-    <main
-      className={`flex min-h-screen flex-col items-center justify-between p-24 ${inter.className}`}
-    >
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/pages/index.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
+    <div className="w-screen h-screen flex flex-col gap-5 p-5">
+      <h1 className="font-bold text-[2rem]">Project Something</h1>
+      <div className="grid grid-flow-col auto-cols-fr h-full gap-5">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={containerData.map((column) => column.id)}>
+            {containerData.map((column) => (
+              <ColumnContainer
+                key={column.id}
+                id={column.id}
+                column={column}
+                containerType={CONTAINER_TYPES.Column}
+              >
+                <SortableContext items={column.items.map((item) => item.id)}>
+                  {column.items.map((item) => (
+                    <ItemContainer
+                      key={item.id}
+                      id={item.id}
+                      item={item}
+                      containerType={CONTAINER_TYPES.Item}
+                    />
+                  ))}
+                </SortableContext>
+              </ColumnContainer>
+            ))}
+          </SortableContext>
+          <DragOverlay>
+            {activeContainer?.containerType === CONTAINER_TYPES.Item &&
+              activeContainer?.item && (
+                <ItemContainer
+                  id={activeContainer.item.id}
+                  item={activeContainer.item}
+                  containerType={CONTAINER_TYPES.Item}
+                />
+              )}
+
+            {activeContainer?.containerType === CONTAINER_TYPES.Column &&
+              activeContainer?.column && (
+                <ColumnContainer
+                  id={activeContainer.column.id}
+                  column={activeContainer.column}
+                  containerType={CONTAINER_TYPES.Column}
+                >
+                  {activeContainer.column.items.map((item) => (
+                    <ItemContainer
+                      key={item.id}
+                      id={item.id}
+                      item={item}
+                      containerType={CONTAINER_TYPES.Item}
+                    />
+                  ))}
+                </ColumnContainer>
+              )}
+          </DragOverlay>
+        </DndContext>
       </div>
+    </div>
+  );
+}
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700/10 after:dark:from-sky-900 after:dark:via-[#0141ff]/40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Discover and deploy boilerplate example Next.js&nbsp;projects.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  )
+function transformColumnAndItemToContainerData(
+  columns: ColumnType[],
+  items: ItemType[]
+): ContainerData {
+  return columns.map((column) => ({
+    id: column.id,
+    title: column.title,
+    items: items.filter((item) => item.columnId === column.id),
+  }));
 }
