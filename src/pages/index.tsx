@@ -11,7 +11,6 @@ import { ItemContainer } from "@/components/item-container";
 import {
   DndContext,
   DragEndEvent,
-  DragMoveEvent,
   DragOverlay,
   DragStartEvent,
   KeyboardSensor,
@@ -69,7 +68,7 @@ export default function Home() {
 
     setActiveContainer(activeData);
   };
-  const handleDragMove = (event: DragMoveEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (!active || !over) return;
@@ -199,8 +198,6 @@ export default function Home() {
         setContainerData(newContainerData);
       }
     }
-  };
-  const handleDragEnd = (event: DragEndEvent) => {
     setActiveContainer(null);
   };
 
@@ -212,7 +209,6 @@ export default function Home() {
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
-          onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={containerData.map((column) => column.id)}>

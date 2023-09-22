@@ -6,32 +6,12 @@ export const CONTAINER_TYPES = {
 export type ContainerType =
   (typeof CONTAINER_TYPES)[keyof typeof CONTAINER_TYPES];
 
-export const DEFAULT_ITEMS = [
-  {
-    id: "item-1-id",
-    title: "Item 1",
-    description: "This is item 1",
-    columnId: "column-1-id",
-  },
-  {
-    id: "item-2-id",
-    title: "Item 2",
-    description: "This is item 2",
-    columnId: "column-1-id",
-  },
-  {
-    id: "item-3-id",
-    title: "Item 3",
-    description: "This is item 3",
-    columnId: "column-2-id",
-  },
-  {
-    id: "item-4-id",
-    title: "Item 4",
-    description: "This is item 4",
-    columnId: "column-2-id",
-  },
-];
+export const DEFAULT_ITEMS = Array.from({ length: 100 }, (_, i) => ({
+  id: `item-${i}-id`,
+  title: `Item ${i}`,
+  description: `This is item ${i}`,
+  columnId: `column-${i % 5}-id`,
+}));
 
 export type ItemType = (typeof DEFAULT_ITEMS)[number];
 
